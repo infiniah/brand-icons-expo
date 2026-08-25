@@ -41,6 +41,6 @@ describe('golden corpus', () => {
 
   it('is the catalogue the corpus was generated from', () => {
     expect(catalog.sourceVersion).toBe('16.28.0');
-    expect(catalog.marks.length).toBe(4309);
+    expect(catalog.marks.length).toBe(4770);
   });
 });

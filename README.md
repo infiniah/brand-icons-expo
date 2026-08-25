@@ -5,156 +5,207 @@
 [![Expo](https://img.shields.io/badge/Expo-compatible-000020?style=flat-square)](https://expo.dev)
 [![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](LICENSE)
 
-**Brand icons, instantly, with no network call.**
+A React Native package that resolves a service name to a brand icon. TypeScript, drawn with `react-native-svg`.
 
-Fetching a company logo normally means someone else's API: a round trip you wait on, a key to
-keep, a bill that grows with your users, a rate limit, an outage you cannot fix, and a third party
-who now knows every company your users look at.
+<p align="center">
+  <img src="docs/images/marks-expo.png" width="290" alt="Marks, the example app">
+  <img src="docs/images/marks-expo-dark.png" width="290" alt="Marks in dark mode">
+</p>
 
-This is a local lookup. **4,309 brands are compiled in**, so an icon costs about **10 microseconds**
-and cannot fail, throttle, or phone anyone. It works offline.
-
-## Why not just…
-
-**…call a logo API?** Latency on every icon, a key to manage, a bill per lookup, a rate limit, and
-an outage you cannot fix. This is a function call against memory.
-
-**…ship an icon set and look these up yourself?** An icon set gives you files, keyed by exact slug.
-It does not answer "which brand is `APPLE.COM/BILL SPOTIFY`", which is the actual work.
-
-**…use a store search?** Apple's is wrapped here as an optional tier. Google publishes no equivalent
-public search API, so there is no Play tier.
-
-**…just take the top match?** That is how you silently draw the wrong logo. `Amazon` matches two
-Amazon sub brands at exactly the same score, and the honest answer is to ask.
-
-## What you get
-
-- **4,309 marks**, 3,175 of them in full colour. No network, no key, no rate limit.
-- A score built from token overlap and structure rather than one fuzzy distance.
-- `isAmbiguous()`, so a coin flip becomes a chooser instead of a wrong icon.
-- A `<BrandIcon>` component that draws vector marks, raster artwork or a monogram.
-- No runtime dependencies beyond `react-native-svg`.
-
-## Install
+## Installation
 
 ```sh
 npx expo install @infiniah/brand-icons react-native-svg
 ```
 
-## Use
+The catalogue ships as an asset rather than a JSON module, because Metro compiles a `require`d JSON
+file into the bundle and one this size takes the JS thread down with it. Register the extension in
+`metro.config.js`:
+
+```js
+const { getDefaultConfig } = require('expo/metro-config');
+const { withBrandIcons } = require('@infiniah/brand-icons/metro');
+
+module.exports = withBrandIcons(getDefaultConfig(__dirname));
+```
+
+## Usage
 
 ```tsx
-import { BrandIcon, BrandIconResolver, best } from '@infiniah/brand-icons';
+import { BrandIcon, BrandIconResolver, best, isAmbiguous } from '@infiniah/brand-icons';
 
-const resolver = new BrandIconResolver();
+const resolver = await BrandIconResolver.bundled();
 const result = await resolver.resolve({ name: 'APPLE.COM/BILL SPOTIFY' });
-const icon = best(result, 0.8);
 
+const icon = best(result, 0.8);
+if (!icon && isAmbiguous(result)) askTheUser(result.candidates);
+```
+
+`bundled` reads and indexes the catalogue once and holds it for the process.
+
+To draw a candidate:
+
+```tsx
 <BrandIcon candidate={icon} fallbackText="Spotify" size={40} />
 ```
 
-The bundler inlines the catalogue, so there is nothing to locate or download, and it is parsed
-once. Pass your own `BrandCatalog` to the constructor if you ship your own marks.
-
-## What it costs your app
-
-The catalogue is the whole point and the whole weight: it is vector geometry for 4,309 brands, and
-nothing else in the package is measurable beside it.
-
-| | brands | in your bundle |
-| --- | --- | --- |
-| full | 4,309 | **2.44 MB** |
-| compact | 4,087 | **1.65 MB** |
-
-Those are the compressed sizes, which is what an app store actually ships.
-
-The compact catalogue leaves out 222 marks whose path data runs past 4 KB. Those are
-illustrations rather than icons, detailed enough to be mush at 40 points, and they are what makes
-the difference. Everything else is identical, including every score.
-
-## It takes the names you actually have
-
-The lookup is a resolver, not a filename match, so a string that came off a bank statement or a
-user's typing still finds the brand:
-
-```
-"APPLE.COM/BILL SPOTIFY"   →   Spotify      1.00
-"NOTION LABS INC"          →   Notion       0.81
-"SQ *BLUE BOTTLE"          →   nothing      —
-"Amazon"                   →   two sub brands tie, ask the user
-```
-
-## Acting on the score
+Outside Expo, supply your own reader once before the first lookup:
 
 ```ts
-const result = await resolver.resolve({ name: 'Amazon' });
-
-if (best(result, 0.8)) {
-  draw(result.candidates[0]);
-} else if (isAmbiguous(result)) {
-  askTheUser(result.candidates);
-}
+setCatalogLoader(async () => myAssetReader('brand-marks.txt'));
 ```
+
+## How it works
+
+A lookup runs in four steps. Nothing leaves the device unless you turn a network tier on.
+
+**1. Normalise.** The query is lowercased, stripped of diacritics and punctuation, and split into
+words. Words that describe a payment rather than a brand are dropped, so `APPLE.COM/BILL SPOTIFY`
+becomes `spotify`. Words that describe a tier are held aside rather than dropped, because they are
+what separates two real brands: `Apple Music` and `Apple TV` share a root and are different things.
+
+**2. Narrow.** Two indexes decide what is worth scoring: an exact map from normalised key, and an
+inverted index from word to marks. A query whose words appear nowhere falls back to the whole
+catalogue, because a misspelling shares no word and edit distance is what should catch it.
+
+**3. Score.** Each shortlisted mark is scored 0 to 1 from signals that can be explained rather than
+one fuzzy distance, in descending order of trust: the normalised keys match; every word of one
+appears in the other; words overlap partly; the strings are merely close in edit distance. A tier
+word present on one side only applies a penalty.
+
+**4. Rank.** Candidates are sorted, deduplicated per brand, and cut at `minimumConfidence`. When a
+tier that returns real artwork is enabled and confident, it outranks a flat catalogue mark.
 
 | Score | Meaning |
 | --- | --- |
 | 1.00 | the normalised names are identical |
-| 0.72 – 0.90 | the query is the brand plus extra words, like a statement descriptor |
+| 0.72 – 0.90 | the query is the brand plus extra words |
 | 0.42 – 0.60 | the brand is more specific than the query. `Apple` is not `Apple TV` |
 | below 0.35 | discarded rather than returned |
 
-## Offline by default
+The score is meant to be acted on. `best(minimum:)` returns a candidate only above the bar you set,
+and `isAmbiguous()` reports when the top two are close enough that picking silently is a guess.
+
+## The icon library
+
+Two catalogues ship. They differ only in which marks they contain; the code, the scoring and the
+API are identical.
+
+| | brands | with colour | monochrome | in your bundle |
+| --- | --- | --- | --- | --- |
+| **full** | 4,770 | 4,595 | 175 | 3.04 MB |
+| **compact** | 4,473 | 4,304 | 169 | 1.91 MB |
+
+Sizes are compressed, which is what an app store ships.
+
+The compact catalogue leaves out 297 marks whose path data runs past 4 KB. Those are illustrations
+rather than icons, detailed enough to be indistinct at 40 points, and they account for most of the
+difference in size.
+
+### Choosing one
 
 ```ts
-const resolver = new BrandIconResolver(catalog, offlineConfiguration);
+const resolver = await BrandIconResolver.bundled({ variant: 'compact' });
 ```
 
-## Loading the catalogue
+`defaultCatalog('compact')` reads the same set directly.
 
-The catalogue is 10 MB. Metro cannot inline a JSON file that size into the JavaScript bundle: it
-compiles `require`d JSON into an object literal, and one this large takes the JS thread down with
-it. It also inlines statically, so hiding the `require` inside a lazy function does not help.
+### Where the marks come from
 
-So the catalogue ships as an **asset** and is read at runtime. In Expo that is automatic:
+| Set | Licence | Contributes |
+| --- | --- | --- |
+| [Simple Icons](https://github.com/simple-icons/simple-icons) 16.28.0 | CC0-1.0 | the monochrome set, one path and one brand colour per mark |
+| [theSVG Color](https://thesvg.org) 1.2.4 | MIT | full colour artwork |
+| [SVG Logos](https://github.com/gilbarbara/logos) 1.2.13 | CC0-1.0 | full colour artwork for brands theSVG misses |
+
+Simple Icons is monochrome by construction. That is right for most brands and wrong for one whose
+identity *is* colour: Figma flattens to a hollow outline, Duolingo to a green silhouette. It also
+omits brands removed on trademark request, Microsoft and Slack among them. The colour sets fill
+both gaps.
+
+A mark carries either a single path and a tint, or a list of coloured layers. It never carries
+both: the flattened silhouette of a mark that has colour artwork is never drawn, and shipping it
+anyway cost 3.3 MB.
+
+223 marks record terms beyond their set's default, some forbidding commercial use or derivative
+works. `excludesRestrictiveLicenses` leaves them out. CC0 and MIT waive copyright in the drawing
+and neither touches trademark, so read [NOTICE](NOTICE) before shipping a mark.
+
+## Providers
+
+Providers are asked cheapest first, and the resolver stops as soon as a candidate is good enough,
+so a name the catalogue knows never opens a socket.
+
+| Tier | Network | Credential | Payload | Confidence it can reach |
+| --- | --- | --- | --- | --- |
+| Bundled | none | none | vector | up to 1.00 |
+| Site icon | manifest, then head, then guessed paths | none | raster | 0.35 to 0.65 |
+| Apple App Store | one request, plus one for artwork | none | raster | up to 1.00 |
+
+**Bundled** is the catalogue above.
+
+**Site icon** reads the service's own site: its web manifest first, then the icons declared in its
+head, then the well known paths. No third party sits in the middle. It is capped low because a
+site answering on a guessed host proves the host exists, not that it belongs to the company meant.
+
+**Apple App Store** searches the iTunes API. Off by default: Apple limits it to roughly twenty
+requests a minute, and its terms describe the artwork as promotional material for store content.
+It is named for Apple on every platform, because Google publishes no equivalent public search API,
+so there is no Play tier.
+
+## Configuration
 
 ```ts
-const resolver = await BrandIconResolver.bundled();
+const resolver = await BrandIconResolver.bundled({
+  allowsAppStore: true,             // off by default
+  minimumConfidence: 0.4,
+  excludesRestrictiveLicenses: true,
+});
 ```
 
-Outside Expo, hand it something that returns the file's contents once, before the first resolve:
+`offlineConfiguration` disables every network tier. `exhaustiveConfiguration` asks all of them and
+never stops early, which is what `probe` uses to compare them.
 
-```ts
-setCatalogLoader(async () => myOwnAssetReader('brand-marks.json'));
+## API
+
+| Export | Purpose |
+| --- | --- |
+| `BrandIconResolver` | runs a lookup across the providers |
+| `BrandQuery` | a name, optionally a domain and a known slug |
+| `BrandIconResult`, `best`, `isAmbiguous` | ranked candidates and how to act on them |
+| `BrandIconCandidate` | one answer: slug, title, confidence, source, shape |
+| `BrandIconShape` | `vector`, `layered` or `raster` |
+| `BrandIcon` | component that draws any of them |
+| `ResolverConfiguration` | thresholds, which tiers run, source preference |
+| `BrandCatalog`, `defaultCatalog`, `setCatalogLoader` | the compiled marks |
+| `parsePath` | path data to segments, if you want to draw it yourself |
+
+## Example app
+
+Marks is a browser for the whole catalogue: search it, filter it by facet, switch between the two
+catalogues, and open any mark to see what the package knows about it. The same app is built four
+times, once per platform, so a change that looks right on one can be checked against the others.
+
+```sh
+cd example && npm install && npx expo start
 ```
 
-## One difference from the native ports
+## Other platforms
 
-The native ports download a favicon and measure its real pixel size from the bytes, so a site that
-declares `512x512` and serves a 32 pixel file scores as 32. This port hands React Native a URI
-instead of the bytes, because that is what `Image` takes, so it can only trust the declared size.
-The favicon tier is a notch more cautious here as a result. Every other score is identical, which
-is what the fixtures below assert.
-
-## Agreeing with the other platforms
-
-This port is not written to a specification and hoped over. Two fixtures generated by the Swift
-implementation are checked in and asserted against:
-
-- `golden-corpus.json` — queries with their normalised key, brand tokens and scored candidates
-- `golden-geometry.json` — element kinds and every control point of a set of marks
-
-`npm test` also parses every path in the catalogue, because the geometry fixture pins twenty marks
-and says nothing about the other four thousand.
+The same library, checked against the same generated fixtures so every platform
+agrees on what a name means and on what shape gets drawn.
 
 | Platform | Repository |
 | --- | --- |
-| React Native and Expo, TypeScript | this repository |
 | iOS and macOS, Swift | [infiniah/brand-icons-ios](https://github.com/infiniah/brand-icons-ios) |
 | Android, Kotlin | [infiniah/brand-icons-android](https://github.com/infiniah/brand-icons-android) |
 | Flutter, Dart | [infiniah/brand-icons-flutter](https://github.com/infiniah/brand-icons-flutter) |
+| React Native and Expo, TypeScript | this repository |
+
+## Contributing
+
+Issues and pull requests welcome. Run `npm test` before opening a pull request.
 
 ## License
 
-MIT for the code. The marks carry their own terms: Simple Icons is CC0, the colour artwork is CC0
-and MIT, and none of it touches trademark. See [NOTICE](NOTICE).
+MIT for the code. The marks carry their own terms, see [NOTICE](NOTICE).

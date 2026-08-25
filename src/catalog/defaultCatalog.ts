@@ -12,7 +12,16 @@ import { BrandCatalog, parseCatalog } from './brandCatalog';
  */
 export type CatalogLoader = () => Promise<string>;
 
-let cached: Promise<BrandCatalog> | undefined;
+/**
+ * Which set of marks to load.
+ *
+ * The two differ only in which marks they contain. Scoring, ranking and the whole API are the same
+ * either way, so a query that resolves in one resolves the same in the other unless the brand it
+ * names is one of the marks `compact` leaves out.
+ */
+export type CatalogVariant = 'full' | 'compact';
+
+const cached = new Map<CatalogVariant, Promise<BrandCatalog>>();
 let loader: CatalogLoader | undefined;
 
 /**
@@ -22,7 +31,7 @@ let loader: CatalogLoader | undefined;
  */
 export function setCatalogLoader(next: CatalogLoader): void {
   loader = next;
-  cached = undefined;
+  cached.clear();
 }
 
 /**
@@ -30,20 +39,24 @@ export function setCatalogLoader(next: CatalogLoader): void {
  *
  * Parsed once and held for the process: await it as often as you like.
  */
-export function defaultCatalog(): Promise<BrandCatalog> {
-  cached ??= load();
-  return cached;
+export function defaultCatalog(variant: CatalogVariant = 'full'): Promise<BrandCatalog> {
+  let pending = cached.get(variant);
+  if (pending === undefined) {
+    pending = load(variant);
+    cached.set(variant, pending);
+  }
+  return pending;
 }
 
 /** Drops the held catalogue. Only useful in tests. */
 export function resetDefaultCatalog(): void {
-  cached = undefined;
+  cached.clear();
 }
 
-async function load(): Promise<BrandCatalog> {
+async function load(variant: CatalogVariant): Promise<BrandCatalog> {
   if (loader) return parseCatalog(JSON.parse(await loader()));
 
-  const expoLoader = await expoAssetLoader();
+  const expoLoader = await expoAssetLoader(variant);
   if (expoLoader) return parseCatalog(JSON.parse(await expoLoader()));
 
   throw new Error(
@@ -57,7 +70,7 @@ async function load(): Promise<BrandCatalog> {
  *
  * Required lazily and behind a try, so this package does not depend on Expo to be used without it.
  */
-async function expoAssetLoader(): Promise<CatalogLoader | undefined> {
+async function expoAssetLoader(variant: CatalogVariant): Promise<CatalogLoader | undefined> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Asset } = require('expo-asset') as typeof import('expo-asset');
@@ -65,7 +78,10 @@ async function expoAssetLoader(): Promise<CatalogLoader | undefined> {
     // ten megabytes of object literal takes the JS thread down. `withBrandIcons` in this
     // package's `metro` entry registers the extension as an asset.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const module = require('../../assets/brand-marks.txt');
+    const module =
+      variant === 'compact'
+        ? require('../../assets/brand-marks-compact.txt')
+        : require('../../assets/brand-marks.txt');
     return async () => {
       const asset = Asset.fromModule(module);
       await asset.downloadAsync();

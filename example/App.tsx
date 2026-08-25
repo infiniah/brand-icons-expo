@@ -1,155 +1,125 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ScrollView, StyleSheet, Text, View, useColorScheme,
+  FlatList, Modal, StyleSheet, Text, View, useColorScheme,
 } from 'react-native';
-
 import {
-  BrandIcon, BrandIconResolver, best, offlineConfiguration, relativeLuminance,
+  defaultCatalog, type BrandCatalog, type BundledMark, type CatalogVariant,
 } from '@infiniah/brand-icons';
-import type { BrandIconCandidate } from '@infiniah/brand-icons';
 
-const STATUS = {
-  applied: { label: 'Applied', tint: '#6b7380' },
-  interview: { label: 'Interview', tint: '#1c66de' },
-  offer: { label: 'Offer', tint: '#107f4f' },
-  rejected: { label: 'Rejected', tint: '#b33133' },
-} as const;
+import { FacetTabs } from './src/FacetTabs';
+import { MarkCell } from './src/MarkCell';
+import { MarkDetailSheet } from './src/MarkDetailSheet';
+import { MarkSearchField } from './src/MarkSearchField';
+import { filterMarks } from './src/filterMarks';
+import type { MarkFacet } from './src/markFacet';
+import { dark, light } from './src/palette';
 
-interface Application {
-  readonly company: string;
-  readonly role: string;
-  readonly postedAgo: string;
-  readonly status: keyof typeof STATUS;
-  icon?: BrandIconCandidate;
-}
-
-/**
- * Seed rows, chosen to make the library's limits visible rather than to flatter it.
- *
- * Microsoft is here because Simple Icons removed it on trademark request, so only the colour sets
- * carry it. Figma and Duolingo are here because their monochrome marks are a hollow outline and a
- * flat silhouette of logos that are really full colour.
- */
-const SEED: Application[] = [
-  { company: 'Figma', role: 'Senior Product Engineer', postedAgo: '2d ago', status: 'interview' },
-  { company: 'Duolingo', role: 'Android Engineer, Learning', postedAgo: '5d ago', status: 'applied' },
-  { company: 'Spotify', role: 'Engineering Manager, Playback', postedAgo: '1w ago', status: 'offer' },
-  { company: 'Microsoft', role: 'Principal SWE, Developer Division', postedAgo: '1w ago', status: 'applied' },
-  { company: 'Notion', role: 'Product Engineer, Databases', postedAgo: '2w ago', status: 'rejected' },
-  { company: 'GitHub', role: 'Staff Engineer, Actions', postedAgo: '3w ago', status: 'interview' },
-];
+const COLUMNS = 5;
 
 export default function App(): React.ReactElement {
-  const isDark = useColorScheme() === 'dark';
-  const [applications, setApplications] = useState<Application[] | undefined>();
+  const theme = useColorScheme() === 'dark' ? dark : light;
+
+  const [catalog, setCatalog] = useState<BrandCatalog | undefined>();
+  const [variant, setVariant] = useState<CatalogVariant>('full');
+  const [facet, setFacet] = useState<MarkFacet>('all');
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<BundledMark | undefined>();
 
   useEffect(() => {
-    void (async () => {
-      // The package bundles and parses its own catalogue, and holds it for the process.
-      const resolver = await BrandIconResolver.bundled(offlineConfiguration);
+    let live = true;
+    setCatalog(undefined);
+    void defaultCatalog(variant).then((loaded) => {
+      if (live) setCatalog(loaded);
+    });
+    return () => { live = false; };
+  }, [variant]);
 
-      const resolved = await Promise.all(
-        SEED.map(async (application) => ({
-          ...application,
-          icon: best(await resolver.resolve({ name: application.company }), 0.5),
-        })),
-      );
-      setApplications(resolved);
-    })();
-  }, []);
+  const visible = useMemo(
+    () => (catalog ? filterMarks(catalog.marks, facet, query) : []),
+    [catalog, facet, query],
+  );
 
-  const theme = isDark ? dark : light;
+  const summary = useMemo(() => {
+    if (!catalog) return 'Loading the catalogue…';
+    const colour = catalog.marks.filter((mark) => mark.layers.length > 0).length;
+    return `${catalog.marks.length.toLocaleString('en-US')} brands · ${colour.toLocaleString('en-US')} in colour`;
+  }, [catalog]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.canvas }]}>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={[styles.title, { color: theme.title }]}>Applied</Text>
-        <Text style={[styles.subtitle, { color: theme.secondary }]}>
-          {applications ? `${applications.length} applications` : 'Loading the catalogue…'}
-        </Text>
+      <StatusBar style={theme === dark ? 'light' : 'dark'} />
 
-        {applications ? (
-          <View style={[styles.card, { backgroundColor: theme.card }]}>
-            {applications.map((application, index) => (
-              <View key={application.company}>
-                <Row application={application} theme={theme} />
-                {index < applications.length - 1 ? (
-                  <View style={[styles.divider, { backgroundColor: theme.hairline }]} />
-                ) : null}
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </ScrollView>
-    </View>
-  );
-}
-
-function Row({
-  application, theme,
-}: { application: Application; theme: Theme }): React.ReactElement {
-  const status = STATUS[application.status];
-  return (
-    <View style={styles.row}>
-      <BrandIcon
-        candidate={application.icon}
-        size={40}
-        fallbackText={application.company}
-        surfaceLuminance={relativeLuminance(theme.cardColor)}
-      />
-      <View style={styles.rowText}>
-        <Text style={[styles.company, { color: theme.title }]}>{application.company}</Text>
-        <Text style={[styles.role, { color: theme.secondary }]} numberOfLines={1}>
-          {application.role}
-        </Text>
-      </View>
-      <View style={styles.rowTrailing}>
-        <View style={[styles.pill, { backgroundColor: `${status.tint}1f` }]}>
-          <Text style={[styles.pillText, { color: status.tint }]}>{status.label}</Text>
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.title, { color: theme.title }]}>Marks</Text>
+          <Text style={[styles.summary, { color: theme.secondary }]}>{summary}</Text>
         </View>
-        <Text style={[styles.ago, { color: theme.secondary }]}>{application.postedAgo}</Text>
+        <MarkSearchField
+          query={query}
+          onQuery={setQuery}
+          variant={variant}
+          onToggleVariant={() => setVariant(variant === 'full' ? 'compact' : 'full')}
+          theme={theme}
+        />
+        <FacetTabs selection={facet} onSelect={setFacet} theme={theme} />
       </View>
+
+      <View style={[styles.hairline, { backgroundColor: theme.hairline }]} />
+
+      {visible.length === 0 ? (
+        <View style={styles.empty}>
+          <Text style={[styles.emptyTitle, { color: theme.title }]}>
+            {catalog ? `Nothing matches “${query}”` : 'Loading the catalogue…'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={visible}
+          keyExtractor={(mark) => mark.slug}
+          numColumns={COLUMNS}
+          contentContainerStyle={styles.grid}
+          columnWrapperStyle={styles.gridRow}
+          initialNumToRender={40}
+          windowSize={7}
+          removeClippedSubviews
+          renderItem={({ item }) => (
+            <MarkCell
+              mark={item}
+              theme={theme}
+              size={46}
+              onPress={() => setSelected(item)}
+            />
+          )}
+        />
+      )}
+
+      <Modal
+        visible={selected !== undefined}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setSelected(undefined)}
+      >
+        {selected ? (
+          <MarkDetailSheet
+            mark={selected}
+            theme={theme}
+            onClose={() => setSelected(undefined)}
+          />
+        ) : null}
+      </Modal>
     </View>
   );
 }
-
-interface Theme {
-  canvas: string;
-  card: string;
-  hairline: string;
-  title: string;
-  secondary: string;
-  cardColor: { red: number; green: number; blue: number };
-}
-
-/** The same palette the other three samples use, so Applied is one product on four platforms. */
-const light: Theme = {
-  canvas: '#f4f4f2', card: '#ffffff', hairline: '#e6e5e1',
-  title: '#14161a', secondary: '#6c7076',
-  cardColor: { red: 0xff, green: 0xff, blue: 0xff },
-};
-
-const dark: Theme = {
-  canvas: '#0e0f11', card: '#191b1e', hairline: '#2a2d31',
-  title: '#f4f4f2', secondary: '#9aa0a6',
-  cardColor: { red: 0x19, green: 0x1b, blue: 0x1e },
-};
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  scroll: { paddingHorizontal: 16, paddingTop: 64, paddingBottom: 32 },
-  title: { fontSize: 32, fontWeight: '700', paddingHorizontal: 4 },
-  subtitle: { fontSize: 14, paddingHorizontal: 4, marginTop: 2, marginBottom: 16 },
-  card: { borderRadius: 18, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  rowText: { flex: 1, marginLeft: 12 },
-  rowTrailing: { alignItems: 'flex-end', marginLeft: 12 },
-  company: { fontSize: 15, fontWeight: '600' },
-  role: { fontSize: 13, marginTop: 2 },
-  divider: { height: 1, marginLeft: 68 },
-  pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20 },
-  pillText: { fontSize: 11, fontWeight: '500' },
-  ago: { fontSize: 11, marginTop: 6 },
+  header: { paddingTop: 64, paddingHorizontal: 16, paddingBottom: 10, gap: 12 },
+  title: { fontSize: 32, fontWeight: '700' },
+  summary: { fontSize: 13, marginTop: 2 },
+  hairline: { height: 1 },
+  grid: { padding: 16, gap: 16 },
+  gridRow: { gap: 12 },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyTitle: { fontSize: 15, fontWeight: '500' },
 });

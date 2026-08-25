@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
+    "expo-asset": ">=11",
     "react": ">=18",
     "react-native": ">=0.74",
     "react-native-svg": ">=15"

@@ -8,6 +8,7 @@ import {
 import type { BrandColor, BrandIconCandidate, BrandIconShape } from '../core/types';
 import { parsePath } from '../vector/svgPathParser';
 import type { PathSegment } from '../vector/pathSegment';
+import { UNSET_FILL_COLOR, markColors } from './markColors';
 
 export interface BrandIconProps {
   readonly candidate?: BrandIconCandidate;
@@ -23,7 +24,7 @@ export interface BrandIconProps {
   readonly surfaceLuminance?: number;
 }
 
-const UNSET_FILL = '#1c1c1e';
+const UNSET_FILL = hexString(UNSET_FILL_COLOR);
 const CONTRAST_THRESHOLD = 0.22;
 
 /**
@@ -156,14 +157,6 @@ function toPathData(segments: readonly PathSegment[]): string {
     }
   }
   return out;
-}
-
-function markColors(shape: BrandIconShape | undefined): BrandColor[] {
-  if (shape?.kind === 'vector') return shape.tint ? [shape.tint] : [];
-  if (shape?.kind === 'layered') {
-    return shape.layers.map((layer) => layer.fill).filter((fill): fill is BrandColor => !!fill);
-  }
-  return [];
 }
 
 const styles = StyleSheet.create({

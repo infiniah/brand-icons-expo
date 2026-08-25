@@ -1,5 +1,6 @@
 import type { BrandCatalog } from '../catalog/brandCatalog';
 import { defaultCatalog } from '../catalog/defaultCatalog';
+import type { CatalogVariant } from '../catalog/defaultCatalog';
 import { rankResult } from '../core/brandIconResult';
 import type { BrandIconResult } from '../core/brandIconResult';
 import type { BrandIconCandidate, BrandIconShape, BrandQuery } from '../core/types';
@@ -40,10 +41,11 @@ export class BrandIconResolver {
    * ```
    */
   static async bundled(
-    configuration: Partial<ResolverConfiguration> = {},
+    configuration: Partial<ResolverConfiguration> & { variant?: CatalogVariant } = {},
     providers?: readonly BrandIconProvider[],
   ): Promise<BrandIconResolver> {
-    return new BrandIconResolver(await defaultCatalog(), configuration, providers);
+    const { variant = 'full', ...rest } = configuration;
+    return new BrandIconResolver(await defaultCatalog(variant), rest, providers);
   }
 
   readonly configuration: ResolverConfiguration;

@@ -4,6 +4,8 @@ import { parsePath } from '../src/vector/svgPathParser';
 
 interface Row {
   slug: string;
+  /** Which colour layer this row pins. Absent for a mark's flattened path. */
+  layer?: number;
   kinds: string;
   bounds: number[];
   points: number[];
@@ -25,7 +27,8 @@ describe('golden geometry', () => {
       const mark = catalog.mark(row.slug);
       expect(mark).toBeDefined();
 
-      const segments = parsePath(mark!.path);
+      const data = row.layer === undefined ? mark!.path : mark!.layers[row.layer]!.path;
+      const segments = parsePath(data);
       expect([row.slug, segments !== undefined]).toEqual([row.slug, true]);
 
       const kinds = segments!.map((segment) => segment.kind).join('');

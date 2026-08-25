@@ -1,10 +1,10 @@
 /**
  * Metro configuration for apps using @infiniah/brand-icons.
  *
- * The catalogue is 10 MB. Metro treats `.json` as source and compiles it into an object literal
- * inside the JavaScript bundle, which at this size takes the JS thread down with it. So the
- * catalogue ships as `brand-marks.txt` and this registers that extension as an asset, which means
- * it is downloaded and read at runtime instead of parsed at startup.
+ * Metro treats `.json` as source and compiles it into an object literal inside the JavaScript
+ * bundle, which a catalogue this size does not survive. The catalogue therefore ships as
+ * `brand-marks.txt`, and this registers that extension as an asset so it is read at runtime
+ * rather than compiled into the bundle.
  *
  * ```js
  * // metro.config.js
