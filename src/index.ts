@@ -1,6 +1,8 @@
 /** Resolve a messy service name to a brand icon, with a confidence score you can act on. */
 
 export { BrandCatalog, parseCatalog, isRestrictive } from './catalog/brandCatalog';
+export { defaultCatalog, resetDefaultCatalog, setCatalogLoader } from './catalog/defaultCatalog';
+export type { CatalogLoader } from './catalog/defaultCatalog';
 export type { BundledMark } from './catalog/brandCatalog';
 
 export { best, isAmbiguous, rankResult } from './core/brandIconResult';

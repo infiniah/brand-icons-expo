@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "Applied",
+    "slug": "applied",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": { "bundleIdentifier": "tech.infiniah.applied.expo", "supportsTablet": false },
+    "assetBundlePatterns": ["**/*"]
+  }
+}

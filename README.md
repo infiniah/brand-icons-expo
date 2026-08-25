@@ -5,32 +5,42 @@
 [![Expo](https://img.shields.io/badge/Expo-compatible-000020?style=flat-square)](https://expo.dev)
 [![License](https://img.shields.io/badge/license-MIT-black?style=flat-square)](LICENSE)
 
-**You have a messy string. You need the right brand icon. That is the whole problem.**
+**A fast, reliable way to get brand icons. No API, no key, no network.**
+
+Getting a company's logo normally means calling somebody's service. That is a round trip you wait
+on, a key you have to keep, a bill that scales with your users, a rate limit, and a dependency that
+can go down or disappear. It also means telling a third party every company name your users look at.
+
+This is a local lookup instead. **4,309 marks are compiled into the binary**, so a name the
+catalogue knows resolves in about **10 microseconds** and cannot fail, rate limit, or phone anyone.
+It works on a plane.
+
+Because it is a resolver rather than a file lookup, it also handles the names you actually have
+rather than the ones you wish you had:
 
 ```
-"APPLE.COM/BILL SPOTIFY"   →   Spotify      0.90
-"SQ *BLUE BOTTLE"          →   nothing      —
+"APPLE.COM/BILL SPOTIFY"   →   Spotify      1.00
 "NOTION LABS INC"          →   Notion       0.81
-"Apple One"                →   ambiguous, ask the user
+"SQ *BLUE BOTTLE"          →   nothing      —
+"Amazon"                   →   two sub brands tie, ask the user
 ```
 
-Those are real bank statement descriptors. Exact matching finds none of them. A `Map` lookup keyed
-on the name finds none of them. This library resolves them offline, in microseconds, and tells you
-how sure it is so you can decide what to do about it.
+Every answer carries a score, so you decide what to do when it is not sure instead of silently
+drawing the wrong logo.
 
 ## Why not just…
 
-**…ship an icon set and look up by name?** An icon set gives you files. It does not answer "which
-brand is `APPLE.COM/BILL SPOTIFY`", which is the actual work.
+**…call a logo API?** Latency on every icon, a key to manage, a bill per lookup, a rate limit, and
+an outage you cannot fix. This is a function call against memory.
 
-**…call a logo API?** It costs money per lookup, needs a key, breaks when it is down, and tells a
-third party every company name your users type.
+**…ship an icon set and look these up yourself?** An icon set gives you files, keyed by exact slug.
+It does not answer "which brand is `APPLE.COM/BILL SPOTIFY`", which is the actual work.
 
-**…use a store search?** Apple's is wrapped here as an optional tier. Google publishes no
-equivalent public search API, so there is no Play tier.
+**…use a store search?** Apple's is wrapped here as an optional tier. Google publishes no equivalent
+public search API, so there is no Play tier.
 
-**…just take the top match?** That is how you silently draw the wrong logo. `Apple One` matches
-`Apple`, `Apple TV` and `Apple Music` almost equally well, and the honest answer is to ask.
+**…just take the top match?** That is how you silently draw the wrong logo. `Amazon` matches two
+Amazon sub brands at exactly the same score, and the honest answer is to ask.
 
 ## What you get
 
@@ -49,26 +59,22 @@ npx expo install @infiniah/brand-icons react-native-svg
 ## Use
 
 ```tsx
-import { Asset } from 'expo-asset';
-import { BrandIcon, BrandIconResolver, best, parseCatalog } from '@infiniah/brand-icons';
+import { BrandIcon, BrandIconResolver, best } from '@infiniah/brand-icons';
 
-const asset = Asset.fromModule(require('@infiniah/brand-icons/assets/brand-marks.json'));
-await asset.downloadAsync();
-const catalog = parseCatalog(JSON.parse(await fetch(asset.localUri!).then((r) => r.text())));
-
-const resolver = new BrandIconResolver(catalog);
+const resolver = new BrandIconResolver();
 const result = await resolver.resolve({ name: 'APPLE.COM/BILL SPOTIFY' });
 const icon = best(result, 0.8);
 
 <BrandIcon candidate={icon} fallbackText="Spotify" size={40} />
 ```
 
-Parse the catalogue once and keep it: building its indexes walks every mark twice.
+The bundler inlines the catalogue, so there is nothing to locate or download, and it is parsed
+once. Pass your own `BrandCatalog` to the constructor if you ship your own marks.
 
 ## Acting on the score
 
 ```ts
-const result = await resolver.resolve({ name: 'Apple One' });
+const result = await resolver.resolve({ name: 'Amazon' });
 
 if (best(result, 0.8)) {
   draw(result.candidates[0]);
@@ -88,6 +94,24 @@ if (best(result, 0.8)) {
 
 ```ts
 const resolver = new BrandIconResolver(catalog, offlineConfiguration);
+```
+
+## Loading the catalogue
+
+The catalogue is 10 MB. Metro cannot inline a JSON file that size into the JavaScript bundle: it
+compiles `require`d JSON into an object literal, and one this large takes the JS thread down with
+it. It also inlines statically, so hiding the `require` inside a lazy function does not help.
+
+So the catalogue ships as an **asset** and is read at runtime. In Expo that is automatic:
+
+```ts
+const resolver = await BrandIconResolver.bundled();
+```
+
+Outside Expo, hand it something that returns the file's contents once, before the first resolve:
+
+```ts
+setCatalogLoader(async () => myOwnAssetReader('brand-marks.json'));
 ```
 
 ## One difference from the native ports

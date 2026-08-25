@@ -1,4 +1,5 @@
 import type { BrandCatalog } from '../catalog/brandCatalog';
+import { defaultCatalog } from '../catalog/defaultCatalog';
 import { rankResult } from '../core/brandIconResult';
 import type { BrandIconResult } from '../core/brandIconResult';
 import type { BrandIconCandidate, BrandIconShape, BrandQuery } from '../core/types';
@@ -31,11 +32,30 @@ export interface ProviderProbe {
  * enough, so the common case never touches the network.
  */
 export class BrandIconResolver {
+  /**
+   * A resolver over the catalogue bundled with this package.
+   *
+   * ```ts
+   * const resolver = await BrandIconResolver.bundled();
+   * ```
+   */
+  static async bundled(
+    configuration: Partial<ResolverConfiguration> = {},
+    providers?: readonly BrandIconProvider[],
+  ): Promise<BrandIconResolver> {
+    return new BrandIconResolver(await defaultCatalog(), configuration, providers);
+  }
+
   readonly configuration: ResolverConfiguration;
   readonly providers: readonly BrandIconProvider[];
 
   private readonly cache = new Map<string, BrandIconResult>();
 
+  /**
+   * Wraps a catalogue you already have.
+   *
+   * Prefer {@link BrandIconResolver.bundled} unless you are shipping your own marks.
+   */
   constructor(
     catalog: BrandCatalog,
     configuration: Partial<ResolverConfiguration> = {},
