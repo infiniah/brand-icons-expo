@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Resolve a messy service name to a brand icon, with a confidence score you can act on.",
   "license": "MIT",
-  "repository": "github:infiniah/brand-icons-react-native",
+  "repository": "github:infiniah/brand-icons-expo",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "files": [
