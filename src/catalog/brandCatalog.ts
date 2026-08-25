@@ -129,8 +129,10 @@ export function parseCatalog(payload: unknown): BrandCatalog {
   const marks: BundledMark[] = [];
 
   for (const entry of document.marks ?? []) {
-    const { slug, title, path } = entry;
-    if (!slug || !title || !path) continue;
+    const { slug, title } = entry;
+    // `path` is absent on a mark with colour layers, which are drawn instead.
+    const path = entry.path ?? '';
+    if (!slug || !title) continue;
 
     const viewBox = numbers(entry.viewBox) ?? [0, 0, 24, 24];
     const colorViewBox = numbers(entry.colorViewBox);
@@ -143,6 +145,7 @@ export function parseCatalog(payload: unknown): BrandCatalog {
 
     // Colour artwork is only usable with the canvas it was drawn on.
     const usableColor = layers.length > 0 && colorViewBox !== undefined;
+    if (path.length === 0 && !usableColor) continue;
     const tint = colorFromHex(entry.tint);
 
     marks.push({

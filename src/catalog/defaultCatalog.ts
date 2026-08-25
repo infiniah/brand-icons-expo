@@ -3,12 +3,12 @@ import { BrandCatalog, parseCatalog } from './brandCatalog';
 /**
  * How the bundled catalogue is read.
  *
- * React Native cannot inline a ten megabyte JSON file into the JavaScript bundle: Metro turns a
+ * React Native cannot inline a ten megabyte JSON file into the JavaScript bundle: Metro compiles
  * `require`d JSON into an object literal, and one this size takes the JS thread down with it. So
- * the catalogue ships as an *asset* and is fetched at runtime, which means loading it is async and
- * needs something that can turn a bundled asset into a URI.
+ * the catalogue ships as a `.txt` asset and is fetched at runtime, which makes loading async.
  *
- * Expo apps get that for free. A bare React Native app, or a test, passes its own loader.
+ * Expo apps get that by adding `withBrandIcons` to their Metro config. A bare React Native app, or
+ * a test, passes its own loader instead.
  */
 export type CatalogLoader = () => Promise<string>;
 
@@ -61,8 +61,11 @@ async function expoAssetLoader(): Promise<CatalogLoader | undefined> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Asset } = require('expo-asset') as typeof import('expo-asset');
+    // `.txt` rather than `.json` on purpose: Metro compiles JSON into the bundle as source, and
+    // ten megabytes of object literal takes the JS thread down. `withBrandIcons` in this
+    // package's `metro` entry registers the extension as an asset.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const module = require('../../assets/brand-marks.json');
+    const module = require('../../assets/brand-marks.txt');
     return async () => {
       const asset = Asset.fromModule(module);
       await asset.downloadAsync();

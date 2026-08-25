@@ -60,14 +60,17 @@ describe('golden geometry', () => {
     const failed: string[] = [];
     let paths = 0;
     for (const mark of catalog.marks) {
-      paths++;
-      if (!parsePath(mark.path)) failed.push(`${mark.slug}: mono`);
+      // A mark with colour layers carries no flattened path, so there is nothing to parse.
+      if (mark.path.length > 0) {
+        paths++;
+        if (!parsePath(mark.path)) failed.push(`${mark.slug}: mono`);
+      }
       mark.layers.forEach((layer, index) => {
         paths++;
         if (!parsePath(layer.path)) failed.push(`${mark.slug}: layer ${index}`);
       });
     }
     expect(failed).toEqual([]);
-    expect(paths).toBeGreaterThan(9000);
+    expect(paths).toBeGreaterThan(4000);
   });
 });

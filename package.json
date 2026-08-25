@@ -10,6 +10,7 @@
     "dist",
     "src",
     "assets",
+    "metro.js",
     "NOTICE",
     "LICENSE"
   ],
@@ -49,5 +50,13 @@
     "testMatch": [
       "**/test/**/*.test.ts"
     ]
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./metro": "./metro.js",
+    "./assets/*": "./assets/*"
   }
 }
