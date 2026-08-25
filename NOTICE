@@ -1,0 +1,31 @@
+BrandIcons bundles brand marks from three upstream sets. The code in this repository is
+MIT. The marks are not the code, and they carry their own terms.
+
+  Simple Icons 16.28.0   CC0-1.0    https://github.com/simple-icons/simple-icons
+  theSVG Color                            MIT        https://thesvg.org
+  SVG Logos (gilbarbara)                  CC0-1.0    https://github.com/gilbarbara/logos
+
+4309 marks are compiled in, 3175 of them with full colour artwork.
+
+TRADEMARK
+
+CC0 and MIT waive copyright in the drawing. Neither touches trademark. CC0 says so itself, in
+section 4(a):
+
+  "No trademark or patent rights held by Affirmer are waived, abandoned, surrendered, licensed
+   or otherwise affected by this document."
+
+Drawing a company's logo in your interface is a trademark question, not a copyright one, and this
+package cannot answer it for you. Using a mark to identify the company it belongs to is ordinarily
+fine. Using one to imply endorsement, or as part of your own branding, is not.
+
+MARKS WITH TERMS BEYOND CC0
+
+223 marks record a licence other than the set default. Some forbid commercial use
+or derivative works, which sits badly with a paid app and with what this package does to every
+mark, which is reparse and rescale it.
+
+  ResolverConfiguration(excludesRestrictiveLicenses = true)
+
+leaves them out. The default is to include them, matching what the upstream sets ship, because
+dropping marks silently would hide a decision that belongs to you.
